@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Scroll & Save PDF",
+  "version": "1.0",
+  "description": "Automates scrolling and capturing the page as a PDF using Chrome's print engine.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "classic"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "debugger",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}
