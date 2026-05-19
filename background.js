@@ -12,10 +12,16 @@ async function activateSelection(tabId) {
       target: { tabId: tabId },
       files: ['content.js']
     });
+    // Give the content script a split second to initialize its listeners
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await chrome.tabs.sendMessage(tabId, { action: 'activate_selection' });
   } catch(e) {
-    console.error("Scripting error:", e);
+    console.error("Could not activate selection:", e);
+    chrome.runtime.sendMessage({ 
+      action: "error", 
+      error: "Cannot run on this page. Chrome restricts extensions on system pages (like chrome://) and the Chrome Web Store." 
+    });
   }
-  chrome.tabs.sendMessage(tabId, { action: 'activate_selection' });
 }
 
 async function startCapture(tabId) {
@@ -35,9 +41,19 @@ async function startCapture(tabId) {
         target: { tabId: tabId },
         files: ['content.js']
       });
-    } catch(e) {}
+      // Give it a split second to initialize
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch(e) {
+      console.error("Scripting error during injection:", e);
+    }
 
-    const dims = await chrome.tabs.sendMessage(tabId, { action: "prepare_capture" });
+    let dims;
+    try {
+      dims = await chrome.tabs.sendMessage(tabId, { action: "prepare_capture" });
+    } catch (e) {
+      throw new Error("Could not connect to the webpage. Try refreshing the page first.");
+    }
+    
     const paperWidth = dims.width / 96;
     const paperHeight = dims.height / 96;
 
