@@ -1,6 +1,6 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'start_capture') {
-    startCapture(message.tabId);
+    startCapture(message.tabId, message.filename);
   } else if (message.action === 'activate_selection_bg') {
     activateSelection(message.tabId);
   }
@@ -24,7 +24,7 @@ async function activateSelection(tabId) {
   }
 }
 
-async function startCapture(tabId) {
+async function startCapture(tabId, filename) {
   try {
     await chrome.debugger.attach({ tabId: tabId }, "1.3");
   } catch (err) {
@@ -76,7 +76,7 @@ async function startCapture(tabId) {
 
     chrome.downloads.download({
       url: "data:application/pdf;base64," + data,
-      filename: "Captured_Page.pdf"
+      filename: filename || "Captured_Page.pdf"
     }, () => {
       chrome.runtime.sendMessage({ action: "finished" });
     });

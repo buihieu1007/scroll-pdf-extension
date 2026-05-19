@@ -1,3 +1,16 @@
+function sanitizeFilename(name) {
+  return name.replace(/[\\/:*?"<>|]/g, "_").trim();
+}
+
+// Fetch the current tab title and pre-populate the filename input
+document.addEventListener('DOMContentLoaded', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab && tab.title) {
+    const sanitizedTitle = sanitizeFilename(tab.title);
+    document.getElementById('fileNameInput').value = sanitizedTitle;
+  }
+});
+
 document.getElementById('selectRoiBtn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
@@ -9,11 +22,26 @@ document.getElementById('captureBtn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
   
+  let filename = document.getElementById('fileNameInput').value.trim();
+  if (!filename) {
+    filename = tab.title ? sanitizeFilename(tab.title) : 'Captured_Page';
+  }
+  
+  // Ensure it has .pdf extension
+  if (!filename.toLowerCase().endsWith('.pdf')) {
+    filename += '.pdf';
+  }
+  
   document.getElementById('status').innerText = 'Initializing capture...';
   document.getElementById('captureBtn').disabled = true;
   document.getElementById('selectRoiBtn').disabled = true;
+  document.getElementById('fileNameInput').disabled = true;
   
-  chrome.runtime.sendMessage({ action: 'start_capture', tabId: tab.id });
+  chrome.runtime.sendMessage({ 
+    action: 'start_capture', 
+    tabId: tab.id,
+    filename: filename
+  });
 });
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -24,10 +52,12 @@ chrome.runtime.onMessage.addListener((message) => {
     document.getElementById('status').style.color = '#d32f2f';
     document.getElementById('captureBtn').disabled = false;
     document.getElementById('selectRoiBtn').disabled = false;
+    document.getElementById('fileNameInput').disabled = false;
   } else if (message.action === 'finished') {
     document.getElementById('status').innerText = 'Done! PDF generated and downloaded.';
     document.getElementById('status').style.color = '#388e3c';
     document.getElementById('captureBtn').disabled = false;
     document.getElementById('selectRoiBtn').disabled = false;
+    document.getElementById('fileNameInput').disabled = false;
   }
 });
