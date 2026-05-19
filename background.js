@@ -1,6 +1,8 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'start_capture') {
     startCapture(message.tabId, message.filename);
+  } else if (message.action === 'start_markdown_capture') {
+    startMarkdownCapture(message.tabId, message.filename);
   } else if (message.action === 'activate_selection_bg') {
     activateSelection(message.tabId);
   }
@@ -35,13 +37,11 @@ async function startCapture(tabId, filename) {
   chrome.runtime.sendMessage({ action: "status", text: "Analyzing layout..." });
 
   try {
-    // Inject content script if not already injected
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
         files: ['content.js']
       });
-      // Give it a split second to initialize
       await new Promise(resolve => setTimeout(resolve, 100));
     } catch(e) {
       console.error("Scripting error during injection:", e);
@@ -59,7 +59,6 @@ async function startCapture(tabId, filename) {
 
     chrome.runtime.sendMessage({ action: "status", text: "Generating continuous PDF..." });
 
-    // Capture single giant PDF page
     const { data } = await chrome.debugger.sendCommand({ tabId: tabId }, "Page.printToPDF", {
       printBackground: true,
       paperWidth: paperWidth,
@@ -83,9 +82,42 @@ async function startCapture(tabId, filename) {
 
   } catch(err) {
     console.error("Capture error:", err);
-    chrome.runtime.sendMessage({ action: "error", error: "Failed to capture or download PDF." });
+    chrome.runtime.sendMessage({ action: "error", error: err.message || "Failed to capture or download PDF." });
   } finally {
     try { await chrome.tabs.sendMessage(tabId, { action: "cleanup_capture" }); } catch(e) {}
     try { await chrome.debugger.detach({ tabId: tabId }); } catch(e) {}
+  }
+}
+
+async function startMarkdownCapture(tabId, filename) {
+  try {
+    chrome.runtime.sendMessage({ action: "status", text: "Injecting dependencies..." });
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ['libs/turndown.js', 'content.js']
+    });
+    // Wait for the scripts to register
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    chrome.runtime.sendMessage({ action: "status", text: "Converting HTML to Markdown..." });
+
+    const response = await chrome.tabs.sendMessage(tabId, { action: "generate_markdown" });
+    if (!response || !response.markdown) {
+      throw new Error("Failed to convert page content.");
+    }
+
+    chrome.runtime.sendMessage({ action: "status", text: "Downloading Markdown..." });
+
+    const base64Data = btoa(unescape(encodeURIComponent(response.markdown)));
+    chrome.downloads.download({
+      url: "data:text/markdown;charset=utf-8;base64," + base64Data,
+      filename: filename || "Captured_Page.md"
+    }, () => {
+      chrome.runtime.sendMessage({ action: "finished" });
+    });
+
+  } catch (err) {
+    console.error("Markdown capture error:", err);
+    chrome.runtime.sendMessage({ action: "error", error: err.message || "Failed to generate Markdown." });
   }
 }

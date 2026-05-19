@@ -174,5 +174,54 @@ if (!window.hasScrollPdfListener) {
       sendResponse({ width, height: captureHeight });
       return false;
     }
+
+    if (message.action === "generate_markdown") {
+      let targetEl;
+      if (window.selectedRoiElement) {
+        targetEl = window.selectedRoiElement;
+      } else {
+        targetEl = document.scrollingElement || document.body;
+        if (targetEl.scrollHeight - targetEl.clientHeight < 50) {
+          const all = document.querySelectorAll('*');
+          let maxArea = 0;
+          for (const el of all) {
+            if (el.scrollHeight > el.clientHeight + 10) {
+              const style = window.getComputedStyle(el);
+              if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                const area = el.clientWidth * el.clientHeight;
+                if (area > maxArea) {
+                  maxArea = area;
+                  targetEl = el;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      try {
+        if (typeof TurndownService === "undefined") {
+          throw new Error("Turndown library is not loaded.");
+        }
+        
+        // Clean clone to avoid messing up the page's original DOM
+        const clone = targetEl.cloneNode(true);
+        
+        // Remove style, script, and SVG tags which clutter markdown conversions
+        clone.querySelectorAll('style, script, iframe, noscript').forEach(el => el.remove());
+
+        const turndownService = new TurndownService({
+          headingStyle: 'atx',
+          codeBlockStyle: 'fenced'
+        });
+        
+        const markdown = turndownService.turndown(clone.innerHTML);
+        sendResponse({ markdown: markdown });
+      } catch (err) {
+        console.error("Turndown conversion error:", err);
+        sendResponse({ error: err.message });
+      }
+      return false;
+    }
   });
 }
